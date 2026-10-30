@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kaboom! — Three Bucket Challenge</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#10122d;color:#f5e9b0;font-family:monospace;display:flex;justify-content:center;padding:18px}
+main{width:min(900px,100%)}h1{text-align:center;letter-spacing:5px}
+.stats,.status,.controls{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:12px 0}
+canvas{display:block;width:100%;height:auto;border:3px solid #777;background:#080b2b;image-rendering:pixelated;touch-action:none;cursor:none}
+button{background:#25284c;color:#f5e9b0;border:2px solid #f5e9b0;padding:10px 22px;font: bold 14px monospace;cursor:pointer}
+button:hover{background:#f5e9b0;color:#111}
+.game{position:relative}.overlay{position:absolute;inset:3px;background:#000d;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
+.overlay h2{font-size:clamp(28px,6vw,48px);margin:0 0 12px}.overlay p{line-height:1.7}
+.hidden{display:none!important}.hint{text-align:center;color:#c9c9d7;font-size:12px;line-height:1.6}
+</style>
+</head>
+<body>
+<main>
+<h1>KABOOM!</h1>
+<div class="stats"><span>SCORE <b id="score">00000</b></span><span>BEST <b id="best">00000</b></span><span>BUCKETS <b id="lives">3</b></span></div>
+<div class="game">
+<canvas id="game" width="640" height="480" aria-label="Kaboom game area"></canvas>
+<div class="overlay" id="overlay"><h2>KABOOM!</h2><p>MAD BOMBER EDITION<br>THREE BUCKETS. THREE CHANCES.<br>Move your mouse left and right to catch the bombs.</p><button id="start">START GAME</button></div>
+</div>
+<div class="status"><span id="level">LEVEL 1</span><span id="combo">COMBO x0</span><span id="message">READY</span></div>
+<div class="controls"><button id="pause">PAUSE</button><button id="restart">RESTART</button></div>
+<p class="hint">Move your mouse left and right to move all remaining buckets together. Each missed bomb destroys one bucket. Catch bombs to score points and build combos.</p>
+</main>
+<script>
+(()=>{
+const $=id=>document.getElementById(id),canvas=$('game'),ctx=canvas.getContext('2d');
+const W=640,H=480,bucketW=54,tiers=[337,385,433];
+let x=320,score=0,lives=3,level=1,combo=0,bombs=[],particles=[],frame=0,spawn=0,active=false,paused=false,last=0,raf=0,best=0;
+try{best=Number(localStorage.getItem('kaboom2600high')||0)}catch(e){}
+const fmt=n=>String(n).padStart(5,'0');
+function updateUI(){$('score').textContent=fmt(score);$('best').textContent=fmt(best);$('lives').textContent=lives;$('level').textContent='LEVEL '+level;$('combo').textContent='COMBO x'+combo}
+function draw(){
+ctx.fillStyle='#080b2b';ctx.fillRect(0,0,W,H);ctx.fillStyle='#1b2454';ctx.fillRect(0,0,W,110);
+for(let i=0;i<38;i++){ctx.fillStyle='#555c91';ctx.fillRect((i*97)%630,(i*43)%265,2,2)}
+let bob=Math.sin(frame*.09)*2;
+ctx.fillStyle='#ffe34e';ctx.font='10px monospace';ctx.fillText('MAD BOMBER',270,26);
+ctx.fillStyle='#f5c74b';ctx.fillRect(298,43+bob,44,26);ctx.fillStyle='#222';ctx.fillRect(304,49+bob,7,8);ctx.fillRect(329,49+bob,7,8);
+ctx.fillStyle='#fff';ctx.fillRect(306,50+bob,3,3);ctx.fillRect(331,50+bob,3,3);ctx.fillStyle='#b12f25';ctx.fillRect(310,62+bob,20,4);
+ctx.fillStyle='#e4a53d';ctx.fillRect(306,70+bob,28,9);ctx.fillStyle='#ed4d37';ctx.fillRect(301,79+bob,38,10);
+ctx.fillStyle='#f1d15c';ctx.fillRect(0,462,W,3);ctx.fillStyle='#b78a3c';ctx.fillRect(0,465,W,15);
+for(const b of bombs){ctx.fillStyle='#f4d34d';ctx.fillRect(b.x-3,b.y-8,6,4);ctx.fillStyle=b.color;ctx.fillRect(b.x-5,b.y-4,10,11);ctx.fillStyle='#fff';ctx.fillRect(b.x-2,b.y-2,2,3)}
+for(const yy of tiers.slice(3-lives)){ctx.fillStyle='#f3d747';ctx.fillRect(x-bucketW/2,yy,bucketW,4);ctx.fillRect(x-bucketW/2,yy+4,5,12);ctx.fillRect(x+bucketW/2-5,yy+4,5,12);ctx.fillStyle='#e99c39';ctx.fillRect(x-bucketW/2+5,yy+14,bucketW-10,3);ctx.fillStyle='#fff0a1';ctx.fillRect(x-10,yy+7,20,2)}
+for(const p of particles){ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,3,3)}
+}
+function burst(px,py,color){for(let i=0;i<11;i++)particles.push({x:px,y:py,vx:(Math.random()-.5)*6,vy:(Math.random()-.5)*6,life:23,color})}
+function throwBomb(){const r=Math.random(),type=r<.25?'fast':r<.5?'slow':'normal',v=type==='fast'?4.4+level*.5:type==='slow'?1.5+level*.22:2.7+level*.35;bombs.push({x:65+Math.random()*510,y:125,v,color:type==='fast'?'#ff5045':type==='slow'?'#55d9ee':'#ffe34e'})}
+function finish(){
+active=false;if(score>best){best=score;try{localStorage.setItem('kaboom2600high',best)}catch(e){}}
+updateUI();$('message').textContent='GAME OVER';$('overlay').classList.remove('hidden');
+$('overlay').innerHTML='<h2>GAME OVER</h2><p>SCORE: '+fmt(score)+'<br>BEST: '+fmt(best)+'</p><button id="again">PLAY AGAIN</button>';$('again').onclick=reset;
+}
+function update(){
+frame++;if(++spawn>Math.max(18,70-level*5)){spawn=0;throwBomb();if(level>=3&&Math.random()<.25)throwBomb()}
+for(let i=bombs.length-1;i>=0;i--){const b=bombs[i];b.y+=b.v;let caught=false;
+for(const yy of tiers.slice(3-lives)){if(b.y>=yy-7&&b.y<=yy+19&&Math.abs(b.x-x)<bucketW/2+4){caught=true;break}}
+if(caught){combo++;const pts=10+Math.min(combo-1,10)*5;score+=pts;burst(b.x,b.y,'#ffe34e');bombs.splice(i,1);$('message').textContent=combo>=3?'COMBO +'+pts:'CAUGHT +'+pts;updateUI();continue}
+if(b.y>465){bombs.splice(i,1);lives--;combo=0;burst(b.x,460,'#ff5147');$('message').textContent='BUCKET LOST!';updateUI();if(lives<=0){finish();return}}
+}
+for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.vy+=.12;if(--p.life<=0)particles.splice(i,1)}
+level=1+Math.floor(score/300)
+}
+function loop(t){if(!active)return;if(!last)last=t;last=t;if(!paused){update();draw()}if(active)raf=requestAnimationFrame(loop)}
+function reset(){cancelAnimationFrame(raf);score=0;lives=3;combo=0;level=1;x=320;bombs=[];particles=[];frame=0;spawn=0;last=0;active=true;paused=false;updateUI();$('overlay').classList.add('hidden');$('pause').textContent='PAUSE';$('message').textContent='PROTECT YOUR BUCKETS!';raf=requestAnimationFrame(loop)}
+function move(e){const r=canvas.getBoundingClientRect();x=Math.max(35,Math.min(605,(e.clientX-r.left)/r.width*W))}
+canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerdown',move);
+$('start').onclick=reset;$('restart').onclick=reset;
+$('pause').onclick=()=>{if(!active)return;paused=!paused;$('pause').textContent=paused?'RESUME':'PAUSE';$('message').textContent=paused?'PAUSED':'DEFEND!';if(!paused){last=0;raf=requestAnimationFrame(loop)}};
+updateUI();draw();
+})();
+</script>
+</body></html>
